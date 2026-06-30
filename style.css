@@ -1,0 +1,353 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scrollbar-gutter: stable; /* prevents page shift when scrollbar appears */
+}
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+header {
+  width: 100%;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+  padding: 18px 30px;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #e8c56d;
+  letter-spacing: 0.5px;
+}
+
+header p {
+  color: #8888aa;
+  font-size: 0.88rem;
+  margin-top: 4px;
+}
+
+.game-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 28px 20px;
+  max-width: 1080px;
+  width: 100%;
+}
+
+/* ── Eval Bar ── */
+.eval-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  width: 44px; /* fixed — prevents layout shift when depth badge text appears */
+}
+
+.eval-bar {
+  width: 22px;
+  height: 560px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #111;
+  position: relative;
+  border: 1px solid #333;
+}
+
+.eval-black {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  background: #2a2a2a;
+  transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+.eval-white {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #f0ead6;
+  transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+.eval-score {
+  font-size: 11px;
+  font-weight: 600;
+  color: #aaa;
+  letter-spacing: 0.5px;
+  min-width: 30px;
+  text-align: center;
+}
+
+.eval-dots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+
+.eval-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #4a7abf;
+  animation: blink 1.2s infinite;
+  opacity: 0;
+}
+.eval-dot:nth-child(2) { animation-delay: 0.4s; }
+.eval-dot:nth-child(3) { animation-delay: 0.8s; }
+
+@keyframes blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* ── Board ── */
+#board { width: 560px; flex-shrink: 0; }
+
+
+/* ── Side Panel ── */
+.side-panel {
+  flex: 1;
+  min-width: 260px;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.opening-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e8c56d;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.opening-desc {
+  font-size: 0.85rem;
+  color: #8888aa;
+  line-height: 1.5;
+}
+
+.turn-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.turn-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid #444;
+}
+
+/* feedback */
+.feedback {
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  display: none;
+}
+
+.feedback.correct {
+  background: #162a1e;
+  border: 1px solid #2d6a4f;
+  color: #52b788;
+  display: block;
+}
+
+.feedback.wrong {
+  background: #2a1616;
+  border: 1px solid #6a2d2d;
+  color: #e07070;
+  display: block;
+}
+
+.feedback.info {
+  background: #162038;
+  border: 1px solid #2d4a7a;
+  color: #6ea8d8;
+  display: block;
+}
+
+.feedback strong { font-weight: 700; }
+
+/* buttons */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.1s;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.btn:first-child { margin-top: 0; }
+.btn:active { transform: scale(0.98); }
+
+.btn-gold {
+  background: #e8c56d;
+  color: #1a1a2e;
+}
+.btn-gold:hover { background: #f0d282; }
+
+.btn-slate {
+  background: #243b6e;
+  color: #c8d8f0;
+}
+.btn-slate:hover { background: #2e4a85; }
+
+/* score */
+.score-card { text-align: center; }
+
+.score-big {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e8c56d;
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.score-streak {
+  font-size: 0.85rem;
+  color: #8888aa;
+  margin-top: 8px;
+}
+
+/* depth badge */
+.depth-badge {
+  font-size: 0.72rem;
+  color: #4a7abf;
+  margin-top: 4px;
+  text-align: center;
+  min-height: 14px;
+}
+
+/* move history */
+.move-list {
+  font-size: 0.8rem;
+  color: #8888aa;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 6px;
+  line-height: 1.8;
+}
+
+.move-list::-webkit-scrollbar { width: 4px; }
+.move-list::-webkit-scrollbar-track { background: transparent; }
+.move-list::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+/* ── Last-move & drag-source square highlights ── */
+.sq-last-move {
+  background-image: linear-gradient(rgba(100, 240, 80, 0.32), rgba(100, 240, 80, 0.32)) !important;
+}
+
+.sq-selected {
+  background-image: linear-gradient(rgba(60, 110, 40, 0.65), rgba(60, 110, 40, 0.65)) !important;
+}
+
+/* Kill chessboard.js yellow outline on selected/highlighted squares */
+[class*="highlight"] {
+  box-shadow: none !important;
+}
+
+/* ── Opening card browsing state ── */
+#openingCard {
+  transition: opacity 0.2s, border-color 0.2s;
+  cursor: default;
+}
+#openingCard.browsing {
+  opacity: 0.55;
+  border-color: #333;
+  cursor: pointer;
+}
+#openingCard.browsing:hover {
+  opacity: 0.75;
+}
+
+#browseHint {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: #6a8aaa;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  height: 18px; /* always reserves space — prevents layout shift */
+}
+#openingCard.browsing #browseHint {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Eval bar board-orientation flip ── */
+.eval-bar.flipped {
+  transform: scaleY(-1);
+}
+
+/* ── Nav controls ── */
+.nav-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.nav-btn {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 8px;
+  background: #243b6e;
+  color: #c8d8f0;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn:hover:not(:disabled) { background: #2e4a85; }
+.nav-btn:active:not(:disabled) { transform: scale(0.95); }
+.nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* responsive */
+@media (max-width: 920px) {
+  .game-area { flex-wrap: wrap; justify-content: center; }
+  #board { width: 90vw; max-width: 440px; }
+  .eval-bar { height: min(90vw, 440px); }
+  .side-panel { max-width: 480px; width: 100%; }
+}

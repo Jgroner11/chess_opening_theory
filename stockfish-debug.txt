@@ -1,0 +1,4 @@
+[02:43:34.759] ━━━ TEST 1: Check STOCKFISH global ━━━
+[02:43:34.760] typeof STOCKFISH = undefined
+[02:43:34.760] FAIL: STOCKFISH is not a function. stockfish.js probably did not load.
+[02:43:34.760] Check the Network tab — is stockfish.js returning 200?

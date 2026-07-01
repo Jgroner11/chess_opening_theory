@@ -344,6 +344,80 @@ header p {
 .nav-btn:active:not(:disabled) { transform: scale(0.95); }
 .nav-btn:disabled { opacity: 0.3; cursor: default; }
 
+/* ── Back button ── */
+.back-btn {
+  display: inline-block;
+  color: #8888aa;
+  font-size: 0.85rem;
+  text-decoration: none;
+  margin-bottom: 10px;
+  transition: color 0.15s;
+}
+.back-btn:hover { color: #e8c56d; }
+
+/* ── Selection page ── */
+.selection-page {
+  padding: 48px 24px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.opening-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.opening-set-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 14px;
+  padding: 28px 24px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.opening-set-card:hover {
+  border-color: #e8c56d88;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.set-icon { font-size: 2.2rem; line-height: 1; }
+
+.set-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e8c56d;
+}
+
+.set-desc {
+  font-size: 0.875rem;
+  color: #8888aa;
+  line-height: 1.5;
+}
+
+.set-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tag {
+  font-size: 0.75rem;
+  background: #0f1e3a;
+  border: 1px solid #0f3460;
+  border-radius: 20px;
+  padding: 3px 10px;
+  color: #6ea8d8;
+}
+
 /* responsive */
 @media (max-width: 920px) {
   .game-area { flex-wrap: wrap; justify-content: center; }

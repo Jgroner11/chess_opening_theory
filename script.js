@@ -28,82 +28,20 @@ function toggleLog() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Opening Positions  (moves in UCI format; FEN computed at runtime)
+//  Opening Sets  (moves in UCI format; FEN computed at runtime)
 // ═══════════════════════════════════════════════════════════════
-const OPENINGS = [
-  { name: "Ruy Lopez — Morphy Defense",
-    moves: ['e2e4','e7e5','g1f3','b8c6','f1b5'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.Bb5. Black should stake a claim in the center." },
-  { name: "Italian Game — Classical",
-    moves: ['e2e4','e7e5','g1f3','b8c6','f1c4'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.Bc4. Black has several principled responses." },
-  { name: "Giuoco Piano — Italian Center",
-    moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','f8c5'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5. White's classical central break." },
-  { name: "Italian — Four Knights",
-    moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','b1c3'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.Bc4 Nf6 4.Nc3. Black's most principled reply?" },
-  { name: "Sicilian — Open Variation",
-    moves: ['e2e4','c7c5','g1f3','d7d6','d2d4'],
-    desc: "After 1.e4 c5 2.Nf3 d6 3.d4. Black should recapture to open the c-file." },
-  { name: "Sicilian Najdorf — Be3",
-    moves: ['e2e4','c7c5','g1f3','d7d6','d2d4','c5d4','f3d4','g8f6','b1c3','a7a6'],
-    desc: "After 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6. White's sharpest response?" },
-  { name: "French Defense — Winawer",
-    moves: ['e2e4','e7e6','d2d4','d7d5','b1c3','f8b4'],
-    desc: "After 1.e4 e6 2.d4 d5 3.Nc3 Bb4. White must react to the pin on c3." },
-  { name: "French Defense — Tarrasch",
-    moves: ['e2e4','e7e6','d2d4','d7d5'],
-    desc: "After 1.e4 e6 2.d4 d5. White avoids the main lines. Best development?" },
-  { name: "Caro-Kann — Classical",
-    moves: ['e2e4','c7c6','d2d4','d7d5','b1c3'],
-    desc: "After 1.e4 c6 2.d4 d5 3.Nc3. Black's standard recapture in the center." },
-  { name: "Queen's Gambit Declined",
-    moves: ['d2d4','d7d5','c2c4','e7e6'],
-    desc: "After 1.d4 d5 2.c4 e6. White's most classical developing move?" },
-  { name: "Queen's Gambit Accepted",
-    moves: ['d2d4','d7d5','c2c4','d5c4'],
-    desc: "After 1.d4 d5 2.c4 dxc4. White must fight for the center immediately." },
-  { name: "Nimzo-Indian Defense",
-    moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4'],
-    desc: "After 1.d4 Nf6 2.c4 e6 3.Nc3 Bb4. How does White handle the pin?" },
-  { name: "King's Indian Defense — Classical",
-    moves: ['d2d4','g8f6','c2c4','g7g6','b1c3','f8g7','e2e4','d7d6','g1f3','e8g8'],
-    desc: "After 1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6 5.Nf3 0-0. White's classical setup?" },
-  { name: "Grünfeld Defense",
-    moves: ['d2d4','g8f6','c2c4','g7g6','b1c3','d7d5'],
-    desc: "After 1.d4 Nf6 2.c4 g6 3.Nc3 d5. How does White accept the challenge?" },
-  { name: "English Opening — Symmetrical",
-    moves: ['c2c4','c7c5','b1c3','b8c6'],
-    desc: "After 1.c4 c5 2.Nc3 Nc6. White's most flexible continuing move?" },
-  { name: "Scotch Game",
-    moves: ['e2e4','e7e5','g1f3','b8c6','d2d4'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.d4. Black's principled response to d4?" },
-  { name: "Vienna Gambit",
-    moves: ['e2e4','e7e5','b1c3','b8c6','f2f4'],
-    desc: "After 1.e4 e5 2.Nc3 Nc6 3.f4. How should Black handle the gambit?" },
-  { name: "Pirc Defense — Austrian Attack",
-    moves: ['e2e4','d7d6','d2d4','g8f6','b1c3','g7g6','f2f4'],
-    desc: "After 1.e4 d6 2.d4 Nf6 3.Nc3 g6 4.f4. Black's best setup?" },
-  { name: "Scandinavian Defense — Main Line",
-    moves: ['e2e4','d7d5','e4d5','d8d5','b1c3'],
-    desc: "After 1.e4 d5 2.exd5 Qxd5 3.Nc3. The queen is attacked — where does it go?" },
-  { name: "London System",
-    moves: ['d2d4','d7d5','g1f3','g8f6','c1f4'],
-    desc: "After 1.d4 d5 2.Nf3 Nf6 3.Bf4. Black's most active development plan?" },
-  { name: "Slav Defense",
-    moves: ['d2d4','d7d5','c2c4','c7c6'],
-    desc: "After 1.d4 d5 2.c4 c6. White's most aggressive continuation?" },
-  { name: "Dutch Defense — Stonewall",
-    moves: ['d2d4','f7f5','c2c4','g8f6'],
-    desc: "After 1.d4 f5 2.c4 Nf6. How does White fight for the center?" },
-  { name: "Catalan Opening",
-    moves: ['d2d4','d7d5','c2c4','e7e6','g2g3'],
-    desc: "After 1.d4 d5 2.c4 e6 3.g3. Black's most solid response to the Catalan?" },
-  { name: "Four Knights Game",
-    moves: ['e2e4','e7e5','g1f3','b8c6','b1c3','g8f6'],
-    desc: "After 1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6. White's most ambitious reply?" },
-];
+const OPENING_SETS = {};
+
+OPENING_SETS['benoni'] = {
+  name:   'Benoni Defense — Main Line',
+  player: 'black',
+  root:   ['d2d4','g8f6','c2c4','c7c5','d4d5','e7e6','b1c3','e6d5','c4d5','d7d6','g1f3','g7g6'],
+  puzzles: [],
+};
+
+const set = new URLSearchParams(window.location.search).get('set') || 'benoni';
+const currentSet = OPENING_SETS[set] || OPENING_SETS['benoni'];
+const OPENINGS = currentSet.puzzles;
 
 // ═══════════════════════════════════════════════════════════════
 //  Stockfish Engine
@@ -118,14 +56,9 @@ let analysisFen = ''; // FEN that was sent to the engine — used to correctly f
 let dynamicBestMove = false; // true while "Show Best Move" infinite search is running
 
 function initEngine() {
-  try {
-    sf = new Worker('stockfish.js');
-    sf.onmessage = function(e) { onEngineMessage(e.data.trim()); };
-    sf.onerror = function(e) { dbg('WORKER ERROR: ' + e.message); };
-    sf.postMessage('uci');
-  } catch (e) {
-    dbg('INIT ERROR: ' + e.message);
-  }
+  sf = new Worker('stockfish.js');
+  sf.onmessage = function(e) { onEngineMessage(e.data.trim()); };
+  sf.postMessage('uci');
 }
 
 function onEngineMessage(msg) {
@@ -237,6 +170,12 @@ function fenFromMoves(moves) {
 function fenAt(idx) { return fenFromMoves(fullLine.slice(0, idx)); }
 
 function loadPuzzle() {
+  if (OPENINGS.length === 0) {
+    $('#openingName').text('No puzzles yet');
+    $('#openingDesc').text('Puzzles for this opening are being generated.');
+    return;
+  }
+
   let next;
   do { next = OPENINGS[Math.floor(Math.random() * OPENINGS.length)]; }
   while (next === currentOpening && OPENINGS.length > 1);
@@ -248,7 +187,7 @@ function loadPuzzle() {
   navIndex = puzzleIdx;
   puzzleScored = false;
   bestMove = null;
-  puzzleBestMove = null;
+  puzzleBestMove = currentOpening.type === 'memorization' ? currentOpening.answer : null;
   puzzleFen = fenFromMoves(origOpening);
 
   game = new Chess(puzzleFen);
@@ -466,15 +405,11 @@ $(document).on('mouseup', function(e) {
     if (dragFrom) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const upSquare = $(el).closest('[data-square]').attr('data-square');
-      dbg(`MOUSEUP(no-drag)  dragFrom=${dragFrom}  upSquare=${upSquare}  sel=${selectedSquare}  sameSquare=${upSquare === dragFrom}`);
       if (upSquare !== dragFrom) {
         $('.sq-selected').removeClass('sq-selected');
         if (selectedSquare) $(`[data-square="${selectedSquare}"]`).addClass('sq-selected');
-        dbg(`  → orphaned highlight cleared, restored sel=${selectedSquare}`);
       }
       // else: mousedown+mouseup same square — click will fire next, let it handle state
-    } else {
-      dbg(`MOUSEUP(no-drag)  dragFrom=null  sel=${selectedSquare}`);
     }
     dragFrom = null;
     return;
@@ -576,15 +511,22 @@ function showOnBoardJudgment(userUci) {
 
 function recordScore(userUci) {
   const correct = puzzleBestMove && userUci.slice(0,4) === puzzleBestMove.slice(0,4);
+  const isMemorization = currentOpening?.type === 'memorization';
   if (correct) {
     score.correct++;
     score.streak++;
-    const correctSan = uciToSan(userUci, puzzleFen);
-    showFeedback('correct', `✓ Correct! Engine's top choice is <strong>${correctSan}</strong>.`);
+    const san = uciToSan(userUci, puzzleFen);
+    const msg = isMemorization
+      ? `✓ <strong>${san}</strong> is the continuation of the line.`
+      : `✓ Correct! Engine's top choice is <strong>${san}</strong>.`;
+    showFeedback('correct', msg);
   } else {
     score.streak = 0;
     const bestSan = puzzleBestMove ? uciToSan(puzzleBestMove, puzzleFen) : '?';
-    showFeedback('wrong', `✗ Best move was <strong>${bestSan}</strong>.`);
+    const msg = isMemorization
+      ? `✗ The line continues <strong>${bestSan}</strong>.`
+      : `✗ Best move was <strong>${bestSan}</strong>.`;
+    showFeedback('wrong', msg);
   }
   updateScoreDisplay();
 }
@@ -600,7 +542,11 @@ function revealBestMove() {
     score.total++;
     score.streak = 0;
     const bestSan = uciToSan(puzzleBestMove, puzzleFen);
-    showFeedback('wrong', `✗ Best move was <strong>${bestSan}</strong>.`);
+    const isMemorization = currentOpening?.type === 'memorization';
+    const msg = isMemorization
+      ? `✗ The line continues <strong>${bestSan}</strong>.`
+      : `✗ Best move was <strong>${bestSan}</strong>.`;
+    showFeedback('wrong', msg);
     updateScoreDisplay();
   }
 
@@ -754,8 +700,6 @@ $(document).ready(function () {
     if (e.which !== 1) return;
     mouseIsDown = true;
     const square = $(this).attr('data-square');
-    const highlighted = $('.sq-selected').map(function(){ return $(this).attr('data-square'); }).get().join(',') || 'none';
-    dbg(`MOUSEDOWN ${square}  sel=${selectedSquare}  highlighted=${highlighted}  validPiece=${validPieceAt(square)}`);
     if (!validPieceAt(square)) return;
     dragFrom   = square;
     dragStartX = e.clientX;
@@ -763,37 +707,28 @@ $(document).ready(function () {
     dragActive = false;
     $('.sq-selected').removeClass('sq-selected');
     $(`[data-square="${square}"]`).addClass('sq-selected');
-    dbg(`  → highlighted ${square}, sel still=${selectedSquare}`);
   });
 
   // Click: handles both first click (select) and second click (move destination)
   $('#board').on('click', '.square-55d63', function() {
     const square = $(this).attr('data-square');
-    const highlighted = $('.sq-selected').map(function(){ return $(this).attr('data-square'); }).get().join(',') || 'none';
-    dbg(`CLICK ${square}  sel=${selectedSquare}  highlighted=${highlighted}`);
     if (navIndex < puzzleIdx) return;
 
     if (selectedSquare === null) {
-      if (!validPieceAt(square)) { dbg(`  → no valid piece, ignored`); return; }
+      if (!validPieceAt(square)) return;
       selectedSquare = square;
-      dbg(`  → selected ${square}`);
     } else if (selectedSquare === square) {
       selectedSquare = null;
       $('.sq-selected').removeClass('sq-selected');
-      dbg(`  → deselected`);
     } else {
       const from = selectedSquare;
       selectedSquare = null;
       $('.sq-selected').removeClass('sq-selected');
       if (performMove(from, square)) {
         board.position(fenAt(navIndex), false);
-        dbg(`  → moved ${from}→${square}`);
       } else if (validPieceAt(square)) {
         selectedSquare = square;
         $(`[data-square="${square}"]`).addClass('sq-selected');
-        dbg(`  → invalid move, reselected ${square}`);
-      } else {
-        dbg(`  → invalid move, deselected`);
       }
     }
   });

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Opening Theory Trainer</title>
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <a class="back-btn" href="index.html">&#8592; Openings</a>
+  <h1>Chess Opening Theory Trainer</h1>
+  <p id="setSubtitle">Find the engine's best move in each opening position</p>
+</header>
+<script>
+  const _set = new URLSearchParams(window.location.search).get('set');
+  const _names = { 'benoni': "Benoni Defense — Main Line" };
+  if (_names[_set]) {
+    document.title = _names[_set] + ' — Chess Opening Trainer';
+    document.getElementById('setSubtitle').textContent = _names[_set];
+  }
+</script>
+
+<div class="game-area">
+
+  <!-- Eval Bar -->
+  <div class="eval-wrap">
+    <div class="eval-bar" id="evalBar">
+      <div class="eval-black" id="evalBlack" style="height:50%"></div>
+      <div class="eval-white" id="evalWhite" style="height:50%"></div>
+    </div>
+    <div class="eval-score" id="evalScore">0.0</div>
+    <div class="eval-dots" id="thinkDots" style="display:none">
+      <div class="eval-dot"></div>
+      <div class="eval-dot"></div>
+      <div class="eval-dot"></div>
+    </div>
+    <div class="depth-badge" id="depthBadge"></div>
+  </div>
+
+  <!-- Board + nav controls -->
+  <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; gap:10px;">
+    <div style="position:relative;">
+      <div id="board"></div>
+      <canvas id="arrowCanvas" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+    </div>
+    <div class="nav-controls">
+      <button class="nav-btn" id="navBack"    onclick="navBack()"    title="Previous move (←)">&#8592;</button>
+      <button class="nav-btn" id="navForward" onclick="navForward()" title="Next move (→)">&#8594;</button>
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <div class="side-panel">
+
+    <div class="card" id="openingCard">
+      <div class="opening-name" id="openingName">Loading…</div>
+      <div class="opening-desc" id="openingDesc"></div>
+      <div class="turn-row">
+        <div class="turn-chip" id="turnChip"></div>
+        <span id="turnText">–</span>
+      </div>
+      <div id="browseHint">← Click to return to puzzle position</div>
+    </div>
+
+    <div class="feedback" id="feedback"></div>
+
+    <div class="card">
+      <button class="btn btn-gold" id="nextBtn" onclick="loadPuzzle()">Next Puzzle →</button>
+      <button class="btn btn-slate" id="hintBtn" onclick="revealBestMove()">Show Best Move</button>
+    </div>
+
+    <div class="card score-card">
+      <div class="score-big" id="scoreDisplay">0 / 0</div>
+      <div class="score-label">Correct Moves</div>
+      <div class="score-streak" id="streakDisplay"></div>
+    </div>
+
+    <div class="card" id="moveHistoryCard" style="display:none">
+      <div style="font-size:0.8rem;color:#666;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px">Opening Moves</div>
+      <div class="move-list" id="moveList"></div>
+    </div>
+
+  </div>
+</div>
+
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chess.js@0.12.0/chess.min.js"></script>
+<script src="stockfish.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>

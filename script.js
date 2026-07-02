@@ -97,8 +97,8 @@ function fetchLichessEval(fen, mode) {
       // If arrow is live, redraw with Lichess best move
       if (dynamicBestMove) drawArrow(uci.slice(0, 2), uci.slice(2, 4));
     })
-    .catch(function() {
-      if (fen === analysisFen) appendLog('error');
+    .catch(function(err) {
+      if (fen === analysisFen) appendLog('error: position not in Lichess cloud eval cache');
     });
 }
 
@@ -133,6 +133,8 @@ let analyzing = false;
 let engineReady = false;
 let analysisFen = ''; // FEN that was sent to the engine — used to correctly flip cp sign
 let dynamicBestMove = false; // true while "Show Best Move" arrow is live
+let pendingStop = false; // true between sending 'stop' and receiving 'bestmove' — discard stale info
+let pendingStopTimer = null; // fallback to clear pendingStop if bestmove never arrives
 
 // Maps fen -> best UCI move, updated by Stockfish and Lichess for every position visited.
 // Used by revealBestMove so the arrow always reflects the current board position.
@@ -160,6 +162,7 @@ function onEngineMessage(msg) {
   }
 
   if (msg.startsWith('info') && msg.includes('score')) {
+    if (pendingStop) return; // stale message from previous position — discard
     const depthM = msg.match(/depth (\d+)/);
     if (depthM) $('#depthBadge').text('depth ' + depthM[1]);
 
@@ -191,6 +194,8 @@ function onEngineMessage(msg) {
 
   // bestmove arrives when we send "stop" (position transition) — use it to hide dots
   if (msg.startsWith('bestmove')) {
+    if (pendingStopTimer) { clearTimeout(pendingStopTimer); pendingStopTimer = null; }
+    pendingStop = false;
     analyzing = false;
     $('#thinkDots').hide();
     $('#depthBadge').text('');
@@ -206,9 +211,14 @@ function startAnalysis(fen, mode) {
   bestMove = null;
   $('#thinkDots').show();
   $('#depthBadge').text('');
+  pendingStop = true;
+  if (pendingStopTimer) clearTimeout(pendingStopTimer);
+  pendingStopTimer = setTimeout(function() { pendingStop = false; }, 200);
   sf.postMessage('stop');
   sf.postMessage('position fen ' + fen);
   sf.postMessage('go infinite');
+  const turn = new Chess(fen).turn();
+  appendLog('[analysis] ' + (mode || 'puzzle') + '  turn=' + (turn === 'w' ? 'white' : 'black') + '  ' + fen);
   fetchLichessEval(fen, mode || 'puzzle');
 }
 

@@ -36,7 +36,11 @@ OPENING_SETS['benoni'] = {
   name:   'Benoni Defense — Main Line',
   player: 'black',
   root:   ['d2d4','g8f6','c2c4','c7c5','d4d5','e7e6','b1c3','e6d5','c4d5','d7d6','g1f3','g7g6'],
-  puzzles: [],
+  puzzles: [
+    { name: 'Benoni — after 6...g6',
+      moves: ['d2d4','g8f6','c2c4','c7c5','d4d5','e7e6','b1c3','e6d5','c4d5','d7d6','g1f3','g7g6'],
+      desc: 'After 1.d4 Nf6 2.c4 c5 3.d5 e6 4.Nc3 exd5 5.cxd5 d6 6.Nf3 g6. What is Black\'s best continuation?' },
+  ],
 };
 
 const set = new URLSearchParams(window.location.search).get('set') || 'benoni';

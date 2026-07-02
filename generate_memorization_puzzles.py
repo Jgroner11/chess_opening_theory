@@ -16,77 +16,11 @@ Requires: pip install chess requests
 """
 
 import argparse
-import json
-import sys
 import time
-from pathlib import Path
 
 import chess
-import chess.engine
-import requests
 
-DATA_DIR             = Path(__file__).resolve().parent / "data"
-LICHESS_CLOUD_EVAL   = "https://lichess.org/api/cloud-eval"
-DEFAULT_DEPTH        = 20
-DEFAULT_SLEEP        = 1.0  # seconds between Lichess requests, be polite
-
-
-def load_set(set_name):
-    path = DATA_DIR / f"{set_name}.json"
-    if not path.exists():
-        sys.exit(f"No such opening set: {path}")
-    with path.open("r", encoding="utf-8") as f:
-        return path, json.load(f)
-
-
-def save_set(path, data):
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-
-
-def lichess_eval(fen):
-    """Returns (cp, mate) relative to the side to move at `fen`, or None if uncached."""
-    try:
-        r = requests.get(LICHESS_CLOUD_EVAL, params={"fen": fen, "multiPv": 1}, timeout=10)
-    except requests.RequestException:
-        return None
-    if r.status_code != 200:
-        return None
-    pvs = r.json().get("pvs") or []
-    if not pvs:
-        return None
-    return pvs[0].get("cp"), pvs[0].get("mate")
-
-
-def stockfish_eval(engine, fen, depth):
-    """Returns (cp, mate) already white-relative, via a local UCI engine."""
-    board = chess.Board(fen)
-    info  = engine.analyse(board, chess.engine.Limit(depth=depth))
-    score = info["score"].pov(chess.WHITE)
-    if score.is_mate():
-        return None, score.mate()
-    return score.score(), None
-
-
-def get_eval(fen, engine, depth, log):
-    result = lichess_eval(fen)
-    if result is not None:
-        cp, mate = result
-        side_is_white = chess.Board(fen).turn == chess.WHITE
-        sign = 1 if side_is_white else -1
-        cp   = cp * sign if cp is not None else None
-        mate = mate * sign if mate is not None else None
-        log(f"  lichess:   cp={cp} mate={mate}")
-        return {"cp": cp, "mate": mate}, True
-
-    if engine is None:
-        log(f"  no cloud eval cached and no engine configured -- eval left null")
-        return {"cp": None, "mate": None}, False
-
-    cp, mate = stockfish_eval(engine, fen, depth)
-    log(f"  stockfish: cp={cp} mate={mate}")
-    return {"cp": cp, "mate": mate}, False
+from chess_data import DEFAULT_DEPTH, DEFAULT_SLEEP, get_top_moves, load_set, save_set, start_engine, to_white_relative
 
 
 def generate(set_name, engine_path, depth, sleep, verbose):
@@ -97,12 +31,7 @@ def generate(set_name, engine_path, depth, sleep, verbose):
     existing      = data.setdefault("puzzles", [])
     existing_keys = {tuple(p["moves"]) for p in existing if p.get("type") == "memorization"}
 
-    engine = None
-    if engine_path:
-        try:
-            engine = chess.engine.SimpleEngine.popen_uci(engine_path)
-        except Exception as e:
-            print(f"warning: could not start engine at '{engine_path}': {e}", file=sys.stderr)
+    engine = start_engine(engine_path)
 
     def log(msg):
         if verbose:
@@ -123,15 +52,21 @@ def generate(set_name, engine_path, depth, sleep, verbose):
                 continue
 
             print(f"ply {i + 1}: {' '.join(moves_before) or '(start)'} -> {uci}")
-            ev, was_lichess = get_eval(board.fen(), engine, depth, log)
+            top, was_lichess = get_top_moves(board.fen(), engine, depth, 1, log)
+            if top:
+                _, cp, mate = top[0]
+                ev = to_white_relative(cp, mate, board.turn == chess.WHITE)
+            else:
+                ev = {"cp": None, "mate": None}
+            if was_lichess:
+                time.sleep(sleep)
+
             new_puzzles.append({
                 "type":     "memorization",
                 "moves":    moves_before,
                 "bestMove": uci,
                 "eval":     ev,
             })
-            if was_lichess:
-                time.sleep(sleep)
     finally:
         if engine:
             engine.quit()

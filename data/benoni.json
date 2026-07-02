@@ -111,6 +111,294 @@
         "cp": 66,
         "mate": null
       }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "c2c4"
+      ],
+      "bestMove": "e7e5",
+      "eval": {
+        "cp": -11,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "e2e4"
+      ],
+      "bestMove": "e7e5",
+      "eval": {
+        "cp": -18,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "g1f3"
+      ],
+      "bestMove": "g8f6",
+      "eval": {
+        "cp": -10,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "g1f3"
+      ],
+      "bestMove": "d7d5",
+      "eval": {
+        "cp": -11,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c1f4"
+      ],
+      "bestMove": "d7d5",
+      "eval": {
+        "cp": 0,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "g2g3"
+      ],
+      "bestMove": "d7d5",
+      "eval": {
+        "cp": -15,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "e2e3"
+      ],
+      "bestMove": "c5d4",
+      "eval": {
+        "cp": -8,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "g1f3"
+      ],
+      "bestMove": "c5d4",
+      "eval": {
+        "cp": -8,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4c5"
+      ],
+      "bestMove": "e7e6",
+      "eval": {
+        "cp": 0,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "g1f3"
+      ],
+      "bestMove": "b7b5",
+      "eval": {
+        "cp": -35,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "a2a4"
+      ],
+      "bestMove": "d7d6",
+      "eval": {
+        "cp": -35,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "c1f4"
+      ],
+      "bestMove": "a7a6",
+      "eval": {
+        "cp": -50,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c3d5"
+      ],
+      "bestMove": "f6d5",
+      "eval": {
+        "cp": 0,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "e2e3"
+      ],
+      "bestMove": "d5c4",
+      "eval": {
+        "cp": 35,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "g1f3"
+      ],
+      "bestMove": "d5d4",
+      "eval": {
+        "cp": 72,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c4d5",
+        "d7d6",
+        "e2e4"
+      ],
+      "bestMove": "g7g6",
+      "eval": {
+        "cp": -68,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c4d5",
+        "d7d6",
+        "c1f4"
+      ],
+      "bestMove": "f6h5",
+      "eval": {
+        "cp": -59,
+        "mate": null
+      }
+    },
+    {
+      "type": "variation",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c4d5",
+        "d7d6",
+        "a2a4"
+      ],
+      "bestMove": "g7g6",
+      "eval": {
+        "cp": -58,
+        "mate": null
+      }
     }
   ]
 }

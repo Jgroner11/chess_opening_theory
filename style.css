@@ -394,35 +394,27 @@ header p {
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 
-.set-icon { font-size: 2.2rem; line-height: 1; }
-
 .set-name {
   font-size: 1.25rem;
   font-weight: 700;
   color: #e8c56d;
 }
 
-.set-desc {
+.set-root {
   font-size: 0.875rem;
   color: #8888aa;
   line-height: 1.5;
 }
 
-.set-tags {
+.set-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 10px;
   margin-top: 4px;
-}
-
-.tag {
   font-size: 0.75rem;
-  background: #0f1e3a;
-  border: 1px solid #0f3460;
-  border-radius: 20px;
-  padding: 3px 10px;
   color: #6ea8d8;
 }
+
+.set-count { color: #6a6a88; }
 
 /* responsive */
 @media (max-width: 920px) {

@@ -14,21 +14,49 @@
 </header>
 
 <div class="selection-page">
-  <div class="opening-set-grid">
-
-    <a class="opening-set-card" href="puzzle.html?set=benoni">
-      <div class="set-icon">♞</div>
-      <div class="set-name">Benoni Defense</div>
-      <div class="set-desc">Study the critical moments in the Modern Benoni after 1.d4 Nf6 2.c4 c5 3.d5 e6 4.Nc3 exd5 5.cxd5 d6 6.Nf3 g6.</div>
-      <div class="set-tags">
-        <span class="tag">Modern Benoni</span>
-        <span class="tag">Black</span>
-        <span class="tag">d4 openings</span>
-      </div>
-    </a>
-
-  </div>
+  <div class="opening-set-grid" id="setGrid"></div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chess.js@0.12.0/chess.min.js"></script>
+<script>
+  function rootToSan(root) {
+    const g = new Chess();
+    const parts = [];
+    root.forEach(function(uci, i) {
+      const mv  = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+      const san = mv ? mv.san : uci;
+      parts.push(i % 2 === 0 ? `${i / 2 + 1}.${san}` : san);
+    });
+    return parts.join(' ');
+  }
+
+  fetch('data/sets.json')
+    .then(r => r.json())
+    .then(setIds => Promise.all(setIds.map(id =>
+      fetch(`data/${id}.json`).then(r => r.json()).then(data => ({ id, data }))
+    )))
+    .then(sets => {
+      const grid = document.getElementById('setGrid');
+      sets.forEach(({ id, data }) => {
+        const count = Array.isArray(data.puzzles) ? data.puzzles.length : 0;
+        const card  = document.createElement('a');
+        card.className = 'opening-set-card';
+        card.href      = `puzzle.html?set=${id}`;
+        card.innerHTML = `
+          <div class="set-name">${data.name}</div>
+          <div class="set-root">${rootToSan(data.root)}</div>
+          <div class="set-meta">
+            <span class="set-color">${data.player === 'white' ? 'White' : 'Black'}</span>
+            <span class="set-count">${count === 1 ? '1 puzzle' : count + ' puzzles'}</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    })
+    .catch(err => {
+      document.getElementById('setGrid').textContent = 'Failed to load opening sets: ' + err.message;
+    });
+</script>
 
 </body>
 </html>

@@ -6,10 +6,7 @@ const lichessLogLines = [];
 function appendLog(text) {
   lichessLogLines.push(text);
   const el = document.getElementById('lichessLog');
-  if (el) {
-    el.textContent += text + '\n';
-    el.scrollTop = el.scrollHeight;
-  }
+  if (el) { el.textContent += text + '\n'; el.scrollTop = el.scrollHeight; }
 }
 
 function copyLog() {
@@ -26,15 +23,12 @@ function toggleLog() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Ask Lichess
+//  Ask Lichess  (manual — logs top 3 moves)
 // ═══════════════════════════════════════════════════════════════
 function askLichess() {
-  const fen = fenAt(navIndex);
+  const fen = hist.fen();
   fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=3')
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(data) {
       appendLog('════════════════════════════════');
       appendLog('FEN: ' + fen);
@@ -43,12 +37,8 @@ function askLichess() {
         const uci = pv.moves.split(' ')[0];
         const san = uciToSan(uci, fen);
         let ev;
-        if (pv.mate != null) {
-          ev = (pv.mate > 0 ? 'M' : '-M') + Math.abs(pv.mate);
-        } else {
-          const cp = pv.cp != null ? pv.cp : 0;
-          ev = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2);
-        }
+        if (pv.mate != null) ev = (pv.mate > 0 ? 'M' : '-M') + Math.abs(pv.mate);
+        else { const cp = pv.cp != null ? pv.cp : 0; ev = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2); }
         appendLog('  ' + (i + 1) + '. ' + san.padEnd(6) + ev.padStart(6));
       });
     })
@@ -56,54 +46,7 @@ function askLichess() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Lichess Eval (background — runs alongside Stockfish)
-// ═══════════════════════════════════════════════════════════════
-function fetchLichessEval(fen, mode) {
-  fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=1')
-    .then(function(r) {
-      if (!r.ok) throw new Error('not found');
-      return r.json();
-    })
-    .then(function(data) {
-      // Discard if position has changed since this fetch was started
-      if (fen !== analysisFen) return;
-      if (!data.pvs || data.pvs.length === 0) throw new Error('no pvs');
-
-      const pv  = data.pvs[0];
-      const uci = pv.moves.split(' ')[0];
-
-      appendLog('received  best: ' + uciToSan(uci, fen) + ' [' + uci + ']');
-
-      // Fix eval bar to Lichess value
-      let rawCp;
-      if (pv.mate != null) {
-        rawCp = pv.mate > 0 ? 30000 : -30000;
-      } else {
-        rawCp = pv.cp != null ? pv.cp : 0;
-      }
-      const whiteCp = new Chess(fen).turn() === 'b' ? -rawCp : rawCp;
-      updateEvalBar(whiteCp, pv.mate != null ? pv.mate : null);
-      $('#depthBadge').text('depth ' + (data.depth || '?'));
-
-      // Fix best move to Lichess value and stop Stockfish
-      if (mode === 'puzzle') puzzleBestMove = uci;
-      bestMove = uci;
-      lichessConfirmedFens.add(fen);
-      positionBestMove[fen] = uci;
-      sf.postMessage('stop');
-      analyzing = false;
-      $('#thinkDots').hide();
-
-      // If arrow is live, redraw with Lichess best move
-      if (dynamicBestMove) drawArrow(uci.slice(0, 2), uci.slice(2, 4));
-    })
-    .catch(function(err) {
-      if (fen === analysisFen) appendLog('error: position not in Lichess cloud eval cache');
-    });
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  Opening Sets  (moves in UCI format; FEN computed at runtime)
+//  Opening Sets
 // ═══════════════════════════════════════════════════════════════
 const OPENING_SETS = {};
 
@@ -123,25 +66,60 @@ const currentSet = OPENING_SETS[set] || OPENING_SETS['benoni'];
 const OPENINGS = currentSet.puzzles;
 
 // ═══════════════════════════════════════════════════════════════
+//  Move History
+//  Single source of truth for all position state.
+// ═══════════════════════════════════════════════════════════════
+const hist = {
+  moves:    [],  // UCI moves for the current line (opening + user exploration)
+  puzzleAt: 0,   // index where the puzzle begins (opening moves end)
+  cursor:   0,   // currently displayed position
+
+  fen()       { return fenFromMoves(this.moves.slice(0, this.cursor)); },
+  puzzleFen() { return fenFromMoves(this.moves.slice(0, this.puzzleAt)); },
+  atPuzzle()  { return this.cursor === this.puzzleAt; },
+
+  load(opening) {
+    this.moves    = [...opening.moves];
+    this.puzzleAt = opening.moves.length;
+    this.cursor   = this.puzzleAt;
+  },
+
+  pushMove(uci) {
+    this.moves = this.moves.slice(0, this.cursor);
+    this.moves.push(uci);
+    this.cursor++;
+  },
+
+  back()    { if (this.cursor > 0)               this.cursor--; },
+  forward() { if (this.cursor < this.moves.length) this.cursor++; },
+
+  resetToOpening() {
+    this.moves  = this.moves.slice(0, this.puzzleAt);
+    this.cursor = this.puzzleAt;
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  Analysis Cache   fen -> { bestMove, cp, mate, depth, source }
+//  'source' is 'lichess' | 'stockfish' | null
+// ═══════════════════════════════════════════════════════════════
+const analysisCache = {};
+
+function cacheGet(fen) { return analysisCache[fen] || null; }
+
+function cacheSet(fen, fields) {
+  if (!analysisCache[fen]) {
+    analysisCache[fen] = { bestMove: null, cp: null, mate: null, depth: null, source: null };
+  }
+  Object.assign(analysisCache[fen], fields);
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Stockfish Engine
 // ═══════════════════════════════════════════════════════════════
-let sf = null;
-let bestMove = null;
-let puzzleBestMove = null;
-let analysisMode = 'puzzle';
-let analyzing = false;
+let sf          = null;
 let engineReady = false;
-let analysisFen = ''; // FEN that was sent to the engine — used to correctly flip cp sign
-let dynamicBestMove = false; // true while "Show Best Move" arrow is live
-let pendingStop = false; // true between sending 'stop' and receiving 'bestmove' — discard stale info
-let pendingStopTimer = null; // fallback to clear pendingStop if bestmove never arrives
-
-// Maps fen -> best UCI move, updated by Stockfish and Lichess for every position visited.
-// Used by revealBestMove so the arrow always reflects the current board position.
-const positionBestMove = {};
-
-// FENs where Lichess has provided the definitive best move — Stockfish must not overwrite these.
-const lichessConfirmedFens = new Set();
+let sfFen       = null; // FEN Stockfish is currently analyzing (null = idle)
 
 function initEngine() {
   sf = new Worker('stockfish.js');
@@ -150,76 +128,114 @@ function initEngine() {
 }
 
 function onEngineMessage(msg) {
-  if (msg === 'uciok') {
-    sf.postMessage('isready');
-    return;
-  }
-
+  if (msg === 'uciok')  { sf.postMessage('isready'); return; }
   if (msg === 'readyok') {
     engineReady = true;
-    if (currentOpening) startAnalysis(puzzleFen);
+    if (currentOpening) analyzePosition(hist.fen());
     return;
   }
+  if (msg.startsWith('bestmove')) return;
 
-  if (msg.startsWith('info') && msg.includes('score')) {
-    if (pendingStop) return; // stale message from previous position — discard
-    const depthM = msg.match(/depth (\d+)/);
-    if (depthM) $('#depthBadge').text('depth ' + depthM[1]);
+  if (!msg.startsWith('info') || !msg.includes('score') || sfFen === null) return;
 
-    const cpM   = msg.match(/score cp (-?\d+)/);
-    const mateM = msg.match(/score mate (-?\d+)/);
-    let rawCp = null;
+  const depthM = msg.match(/depth (\d+)/);
+  if (depthM) $('#depthBadge').text('depth ' + depthM[1]);
 
-    if (cpM) {
-      rawCp = parseInt(cpM[1]);
-    } else if (mateM) {
-      const m = parseInt(mateM[1]);
-      rawCp = m > 0 ? 30000 : -30000;
-    }
+  const cpM   = msg.match(/score cp (-?\d+)/);
+  const mateM = msg.match(/score mate (-?\d+)/);
+  let cp = null, mate = null;
+  if (cpM)   cp   = parseInt(cpM[1]);
+  if (mateM) { mate = parseInt(mateM[1]); cp = mate > 0 ? 30000 : -30000; }
 
-    if (rawCp !== null) {
-      const whiteCp = (analysisFen && new Chess(analysisFen).turn() === 'b') ? -rawCp : rawCp;
-      updateEvalBar(whiteCp, mateM ? parseInt(mateM[1]) : null);
-    }
-
-    const pvM = msg.match(/\bpv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-    if (pvM) {
-      if (!bestMove) $('#thinkDots').hide(); // first result — engine is no longer cold
-      bestMove = pvM[1];
-      if (!lichessConfirmedFens.has(analysisFen)) positionBestMove[analysisFen] = pvM[1];
-      if (analysisMode === 'puzzle') puzzleBestMove = pvM[1];
-      if (dynamicBestMove) drawArrow(pvM[1].slice(0,2), pvM[1].slice(2,4));
-    }
+  if (cp !== null) {
+    const whiteCp = new Chess(sfFen).turn() === 'b' ? -cp : cp;
+    updateEvalBar(whiteCp, mate);
   }
 
-  // bestmove arrives when we send "stop" (position transition) — use it to hide dots
-  if (msg.startsWith('bestmove')) {
-    if (pendingStopTimer) { clearTimeout(pendingStopTimer); pendingStopTimer = null; }
-    pendingStop = false;
-    analyzing = false;
-    $('#thinkDots').hide();
-    $('#depthBadge').text('');
+  const pvM = msg.match(/\bpv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+  if (pvM) {
+    const uci = pvM[1];
+    cacheSet(sfFen, { bestMove: uci, cp, mate, depth: depthM ? parseInt(depthM[1]) : null, source: 'stockfish' });
+
+    if (sfFen === hist.puzzleFen() && currentOpening?.type !== 'memorization') {
+      puzzleBestMove = uci;
+    }
+
+    if (showBestMoveActive && sfFen === hist.fen()) {
+      drawArrow(uci.slice(0, 2), uci.slice(2, 4));
+    }
   }
 }
 
-function startAnalysis(fen, mode) {
-  if (!sf || !engineReady) return;
-  dynamicBestMove = false;
-  analysisFen = fen;
-  analysisMode = mode || 'puzzle';
-  analyzing = true;
-  bestMove = null;
-  $('#thinkDots').show();
-  $('#depthBadge').text('');
-  pendingStop = true;
-  if (pendingStopTimer) clearTimeout(pendingStopTimer);
-  pendingStopTimer = setTimeout(function() { pendingStop = false; }, 200);
-  sf.postMessage('stop');
+function stopEngine() {
+  if (sfFen !== null) {
+    sf.postMessage('stop');
+    sfFen = null;
+  }
+}
+
+function runEngine(fen) {
+  stopEngine();
+  sfFen = fen;
   sf.postMessage('position fen ' + fen);
   sf.postMessage('go infinite');
-  const turn = new Chess(fen).turn();
-  appendLog('[analysis] ' + (mode || 'puzzle') + '  turn=' + (turn === 'w' ? 'white' : 'black') + '  ' + fen);
-  fetchLichessEval(fen, mode || 'puzzle');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Analysis Controller   Lichess first → Stockfish fallback
+// ═══════════════════════════════════════════════════════════════
+function analyzePosition(fen) {
+  stopEngine();
+  $('#thinkDots').show();
+  $('#depthBadge').text('');
+
+  // Already have a definitive Lichess result — apply immediately
+  const cached = cacheGet(fen);
+  if (cached && cached.source === 'lichess') {
+    applyResult(fen);
+    $('#thinkDots').hide();
+    return;
+  }
+
+  // Try Lichess first
+  fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=1')
+    .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+    .then(function(data) {
+      if (hist.fen() !== fen) return; // navigated away while fetching
+      if (!data.pvs || !data.pvs.length) throw new Error();
+      const pv  = data.pvs[0];
+      const uci = pv.moves.split(' ')[0];
+      cacheSet(fen, { bestMove: uci, cp: pv.cp ?? null, mate: pv.mate ?? null, depth: data.depth ?? null, source: 'lichess' });
+      appendLog('received  best: ' + uciToSan(uci, fen) + ' [' + uci + ']');
+      applyResult(fen);
+      $('#thinkDots').hide();
+    })
+    .catch(function() {
+      if (hist.fen() !== fen) return;
+      appendLog('error: position not in Lichess cloud eval cache');
+      if (engineReady) runEngine(fen);
+    });
+}
+
+function applyResult(fen) {
+  const c = cacheGet(fen);
+  if (!c || !c.bestMove) return;
+
+  // Update eval bar
+  const rawCp   = c.mate != null ? (c.mate > 0 ? 30000 : -30000) : (c.cp ?? 0);
+  const whiteCp = new Chess(fen).turn() === 'b' ? -rawCp : rawCp;
+  updateEvalBar(whiteCp, c.mate ?? null);
+  if (c.depth) $('#depthBadge').text('depth ' + c.depth);
+
+  // Update puzzle best move if this is the puzzle position
+  if (fen === hist.puzzleFen() && currentOpening?.type !== 'memorization') {
+    puzzleBestMove = c.bestMove;
+  }
+
+  // Draw live arrow if show best move is active and we're still on this position
+  if (showBestMoveActive && hist.fen() === fen) {
+    drawArrow(c.bestMove.slice(0, 2), c.bestMove.slice(2, 4));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -227,12 +243,10 @@ function startAnalysis(fen, mode) {
 // ═══════════════════════════════════════════════════════════════
 function updateEvalBar(cp, mateNum) {
   const whiteRatio = 0.5 + 0.5 * Math.tanh(cp / 400);
-  const whitePct = (whiteRatio * 100).toFixed(1);
-  const blackPct = (100 - whiteRatio * 100).toFixed(1);
-
+  const whitePct   = (whiteRatio * 100).toFixed(1);
+  const blackPct   = (100 - whiteRatio * 100).toFixed(1);
   $('#evalBlack').css('height', blackPct + '%');
   $('#evalWhite').css('height', whitePct + '%');
-
   let label;
   if (mateNum !== null) {
     label = (mateNum > 0 ? 'M' : '-M') + Math.abs(mateNum);
@@ -244,76 +258,79 @@ function updateEvalBar(cp, mateNum) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Game State
+//  Puzzle State
 // ═══════════════════════════════════════════════════════════════
-let game = null;
-let board = null;
-let currentOpening = null;
-let origOpening = [];  // original opening moves — never modified after load
-let fullLine = [];     // single rewritable line (opening context + user moves)
-let puzzleIdx = 0;     // index in fullLine where the puzzle starts
-let navIndex = 0;      // cursor into fullLine
-let puzzleFen = '';    // FEN at puzzleIdx
-let puzzleScored = false;
+let currentOpening     = null;
+let puzzleBestMove     = null; // correct answer for the current puzzle position
+let puzzleScored       = false;
+let showBestMoveActive = false;
 let score = { correct: 0, total: 0, streak: 0 };
 
+// ═══════════════════════════════════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════════════════════════════════
 function fenFromMoves(moves) {
   const g = new Chess();
-  for (const m of moves) {
-    g.move({ from: m.slice(0,2), to: m.slice(2,4), promotion: m[4] || 'q' });
-  }
+  for (const m of moves) g.move({ from: m.slice(0,2), to: m.slice(2,4), promotion: m[4] || 'q' });
   return g.fen();
 }
 
-function fenAt(idx) { return fenFromMoves(fullLine.slice(0, idx)); }
+function uciToSan(uci, fen) {
+  try {
+    const tmp = new Chess(fen);
+    const mv  = tmp.move({ from: uci.slice(0,2), to: uci.slice(2,4), promotion: uci[4] || 'q' });
+    return mv ? mv.san : uci;
+  } catch (_) { return uci; }
+}
 
+function isTerminalPosition(fen) {
+  const g = new Chess(fen);
+  return g.in_checkmate() || g.in_stalemate();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Puzzle Loading
+// ═══════════════════════════════════════════════════════════════
 function loadPuzzle() {
   if (OPENINGS.length === 0) {
     $('#openingName').text('No puzzles yet');
     $('#openingDesc').text('Puzzles for this opening are being generated.');
     return;
   }
-
   let next;
   do { next = OPENINGS[Math.floor(Math.random() * OPENINGS.length)]; }
   while (next === currentOpening && OPENINGS.length > 1);
   currentOpening = next;
 
-  origOpening = [...currentOpening.moves];
-  fullLine = [...origOpening];
-  puzzleIdx = origOpening.length;
-  navIndex = puzzleIdx;
-  puzzleScored = false;
-  bestMove = null;
-  puzzleBestMove = currentOpening.type === 'memorization' ? currentOpening.answer : null;
-  puzzleFen = fenFromMoves(origOpening);
+  hist.load(currentOpening);
+  puzzleBestMove     = currentOpening.type === 'memorization' ? currentOpening.answer : null;
+  puzzleScored       = false;
+  showBestMoveActive = false;
 
-  game = new Chess(puzzleFen);
-  board.position(puzzleFen, false);
-  boardFlipped = game.turn() === 'b';
+  const fen = hist.fen();
+  boardFlipped = new Chess(fen).turn() === 'b';
+  board.position(fen, false);
   board.orientation(boardFlipped ? 'black' : 'white');
   $('#evalBar').toggleClass('flipped', boardFlipped);
 
   clearArrow();
-  setLastMoveHighlight(origOpening);
-
+  setLastMoveHighlight(currentOpening.moves);
   $('#openingName').text(currentOpening.name);
   $('#openingDesc').text(currentOpening.desc);
-  updateTurnIndicator(game.turn());
+  updateTurnIndicator(new Chess(fen).turn());
   updateNavButtons();
   updatePuzzlePositionState();
   hideFeedback();
   updateScoreDisplay();
   updateEvalBar(0, null);
-  startAnalysis(puzzleFen, 'puzzle');
+  analyzePosition(fen);
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Navigation
 // ═══════════════════════════════════════════════════════════════
 const NAV_ANIM_MS = 180;
-
-let navQueue = [];
+let navQueue     = [];
 let navAnimating = false;
 
 function navBack()    { navQueue.push(-1); processNavQueue(); }
@@ -331,90 +348,58 @@ function animatePieceMove(fromSq, toSq, pieceSrc) {
   const from = squareToPixel(fromSq);
   const to   = squareToPixel(toSq);
   if (!from || !to) return;
-
-  // Hide the destination piece (chessboard.js already placed it there).
   const $dest = $(`[data-square="${toSq}"]`).find('img');
   $dest.css('opacity', 0);
-
-  // Create a floating overlay piece we fully control for the animation.
   const $anim = $('<img>')
     .attr('src', pieceSrc)
-    .css({
-      position: 'fixed',
-      left: from.left, top: from.top,
-      width: from.size, height: from.size,
-      zIndex: 9000,
-      pointerEvents: 'none',
-      transition: 'none'
-    });
+    .css({ position: 'fixed', left: from.left, top: from.top, width: from.size, height: from.size, zIndex: 9000, pointerEvents: 'none', transition: 'none' });
   $('body').append($anim);
-
-  void $anim[0].offsetWidth; // force reflow before starting transition
-  $anim.css({
-    transition: `left ${NAV_ANIM_MS}ms ease, top ${NAV_ANIM_MS}ms ease`,
-    left: to.left,
-    top:  to.top
-  });
-
-  setTimeout(() => {
-    $dest.css('opacity', 1);
-    $anim.remove();
-  }, NAV_ANIM_MS);
+  void $anim[0].offsetWidth;
+  $anim.css({ transition: `left ${NAV_ANIM_MS}ms ease, top ${NAV_ANIM_MS}ms ease`, left: to.left, top: to.top });
+  setTimeout(() => { $dest.css('opacity', 1); $anim.remove(); }, NAV_ANIM_MS);
 }
 
 function processNavQueue() {
   if (navAnimating || navQueue.length === 0) return;
   const step = navQueue.shift();
-  const next = navIndex + step;
-  if (next < 0 || next > fullLine.length) { processNavQueue(); return; }
+  const next = hist.cursor + step;
+  if (next < 0 || next > hist.moves.length) { processNavQueue(); return; }
 
-  // Determine the squares the piece travels between for this step.
   let fromSq, toSq;
   if (step === +1) {
-    const mv = fullLine[next - 1]; // move being replayed
-    fromSq = mv.slice(0, 2);
-    toSq   = mv.slice(2, 4);
+    const mv = hist.moves[next - 1];
+    fromSq = mv.slice(0,2); toSq = mv.slice(2,4);
   } else {
-    const mv = fullLine[navIndex - 1]; // move being un-done
-    // Visual motion is the reverse: piece returns from dest back to source
-    fromSq = mv.slice(2, 4);
-    toSq   = mv.slice(0, 2);
+    const mv = hist.moves[hist.cursor - 1];
+    fromSq = mv.slice(2,4); toSq = mv.slice(0,2);
   }
 
-  // Capture piece src from the source square BEFORE board.position changes the DOM.
   const pieceSrc = $(`[data-square="${fromSq}"]`).find('img').attr('src') || '';
-
-  navIndex = next;
+  hist.cursor = next;
   navAnimating = true;
 
-  // Snap board to final state with NO built-in animation, then do our own.
-  const fen = fenAt(navIndex);
+  const fen = hist.fen();
   board.position(fen, false);
   animatePieceMove(fromSq, toSq, pieceSrc);
 
   clearArrow();
   clearSquareHighlights();
-  if (navIndex > 0) {
-    const last = fullLine[navIndex - 1];
-    applyLastMove(last.slice(0, 2), last.slice(2, 4));
+  if (hist.cursor > 0) {
+    const last = hist.moves[hist.cursor - 1];
+    applyLastMove(last.slice(0,2), last.slice(2,4));
   }
+  updateTurnIndicator(new Chess(fen).turn());
   updateNavButtons();
   updatePuzzlePositionState();
-  startAnalysis(fen, 'eval');
+  analyzePosition(fen);
 
   setTimeout(() => { navAnimating = false; processNavQueue(); }, NAV_ANIM_MS);
 }
 
-
-function isTerminalPosition(idx) {
-  const g = new Chess(fenAt(idx));
-  return g.in_checkmate() || g.in_stalemate();
-}
-
 function updateNavButtons() {
-  $('#navBack').prop('disabled', navIndex <= 0);
-  $('#navForward').prop('disabled', navIndex >= fullLine.length);
-  $('#hintBtn').prop('disabled', isTerminalPosition(navIndex));
+  $('#navBack').prop('disabled', hist.cursor <= 0);
+  $('#navForward').prop('disabled', hist.cursor >= hist.moves.length);
+  $('#hintBtn').prop('disabled', isTerminalPosition(hist.fen()));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -422,11 +407,10 @@ function updateNavButtons() {
 // ═══════════════════════════════════════════════════════════════
 function setLastMoveHighlight(moves) {
   clearSquareHighlights();
-  if (!moves || moves.length === 0) return;
+  if (!moves || !moves.length) return;
   const last = moves[moves.length - 1];
   applyLastMove(last.slice(0,2), last.slice(2,4));
 }
-
 
 function applyLastMove(from, to) {
   $(`[data-square="${from}"]`).addClass('sq-last-move');
@@ -439,24 +423,20 @@ function clearSquareHighlights() {
 }
 
 function updateTurnIndicator(turn) {
-  // Always reflects puzzle turn — called once on loadPuzzle, not on navigation
   $('#turnChip').css('background', turn === 'w' ? '#f0ead6' : '#2a2a2a');
   $('#turnText').text(turn === 'w' ? 'White to move' : 'Black to move');
 }
 
 function updatePuzzlePositionState() {
-  const atPuzzle = navIndex === puzzleIdx;
-  $('#openingCard').toggleClass('browsing', !atPuzzle);
+  $('#openingCard').toggleClass('browsing', !hist.atPuzzle());
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Board Interaction
 // ═══════════════════════════════════════════════════════════════
 let selectedSquare = null;
-
-// Own drag implementation (chessboard.js drag is disabled via onDragStart returning false)
 let dragFrom    = null;
-let dragStartX  = 0, dragStartY = 0;
+let dragStartX  = 0, dragStartY  = 0;
 let dragActive  = false;
 let mouseIsDown = false;
 let $dragGhost  = null;
@@ -464,8 +444,8 @@ let $dragSrcImg = null;
 const DRAG_THRESHOLD = 8;
 
 function validPieceAt(square) {
-  if (navIndex < puzzleIdx) return false;
-  const g = new Chess(fenAt(navIndex));
+  if (hist.cursor < hist.puzzleAt) return false;
+  const g = new Chess(hist.fen());
   if (g.game_over()) return false;
   const p = g.get(square);
   return p && p.color === g.turn();
@@ -483,17 +463,13 @@ $(document).on('mousemove', function(e) {
   const dx = e.clientX - dragStartX;
   const dy = e.clientY - dragStartY;
   if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
-
-  // Threshold crossed — lift piece into ghost
   dragActive = true;
   const sqSize = $('#board').width() / 8;
   $dragSrcImg = $(`[data-square="${dragFrom}"]`).find('img');
   $dragSrcImg.css('opacity', 0);
   $dragGhost = $('<img>')
     .attr('src', $dragSrcImg.attr('src'))
-    .css({ position: 'fixed', width: sqSize, height: sqSize,
-           left: e.clientX - sqSize / 2, top: e.clientY - sqSize / 2,
-           zIndex: 9001, pointerEvents: 'none' })
+    .css({ position: 'fixed', width: sqSize, height: sqSize, left: e.clientX - sqSize / 2, top: e.clientY - sqSize / 2, zIndex: 9001, pointerEvents: 'none' })
     .appendTo('body');
 });
 
@@ -507,120 +483,113 @@ $(document).on('mouseup', function(e) {
         $('.sq-selected').removeClass('sq-selected');
         if (selectedSquare) $(`[data-square="${selectedSquare}"]`).addClass('sq-selected');
       }
-      // else: mousedown+mouseup same square — click will fire next, let it handle state
     }
     dragFrom = null;
     return;
   }
-
   if ($dragGhost)  { $dragGhost.remove();  $dragGhost  = null; }
   if ($dragSrcImg) { $dragSrcImg.css('opacity', 1); $dragSrcImg = null; }
-
   const el     = document.elementFromPoint(e.clientX, e.clientY);
   const target = $(el).closest('[data-square]').attr('data-square');
   let moveSucceeded = false;
-  if (target && target !== dragFrom) {
-    moveSucceeded = performMove(dragFrom, target);
-  }
-  board.position(fenAt(navIndex), false);
+  if (target && target !== dragFrom) moveSucceeded = performMove(dragFrom, target);
+  board.position(hist.fen(), false);
   if (moveSucceeded) {
     selectedSquare = null;
     $('.sq-selected').removeClass('sq-selected');
   } else {
-    // Invalid drop — keep piece selected so user can still click to move
     selectedSquare = dragFrom;
     $(`[data-square="${dragFrom}"]`).addClass('sq-selected');
   }
-  dragFrom  = null;
+  dragFrom   = null;
   dragActive = false;
 });
 
+// ═══════════════════════════════════════════════════════════════
+//  Move Execution
+// ═══════════════════════════════════════════════════════════════
 function performMove(source, target) {
-  if (navIndex < puzzleIdx) return false; // opening review — navigate only
-  const g = new Chess(fenAt(navIndex));
+  if (hist.cursor < hist.puzzleAt) return false;
+  const g = new Chess(hist.fen());
   const move = g.move({ from: source, to: target, promotion: 'q' });
   if (!move) return false;
 
-  const userUci = source + target;
-  const atPuzzlePos = (navIndex === puzzleIdx);
+  const userUci     = source + target;
+  const atPuzzlePos = hist.atPuzzle();
 
-  fullLine = fullLine.slice(0, navIndex);
-  fullLine.push(userUci);
-  navIndex++;
-  game = g;
+  hist.pushMove(userUci);
 
   $('.sq-last-move').removeClass('sq-last-move');
   applyLastMove(source, target);
+  updateTurnIndicator(new Chess(hist.fen()).turn());
   updateNavButtons();
   updatePuzzlePositionState();
 
+  showBestMoveActive = false;
+
   if (atPuzzlePos) {
-    if (analyzing || !puzzleBestMove) {
-      waitForBestMove(userUci);
-    } else {
-      showOnBoardJudgment(userUci);
-    }
     if (!puzzleScored) {
       puzzleScored = true;
       score.total++;
-      if (analyzing || !puzzleBestMove) {
-        waitForScore(userUci);
+      if (!puzzleBestMove) {
+        waitForPuzzleAnswer(userUci);
       } else {
         recordScore(userUci);
+        showOnBoardJudgment(userUci);
       }
+    } else {
+      showOnBoardJudgment(userUci);
     }
   } else {
     clearArrow();
-    startAnalysis(g.fen(), 'eval');
   }
 
+  analyzePosition(hist.fen());
   return true;
 }
 
-function waitForBestMove(userUci) {
-  const poll = setInterval(() => {
-    if (puzzleBestMove) { clearInterval(poll); showOnBoardJudgment(userUci); }
+function waitForPuzzleAnswer(userUci) {
+  const poll = setInterval(function() {
+    if (puzzleBestMove) {
+      clearInterval(poll);
+      recordScore(userUci);
+      showOnBoardJudgment(userUci);
+    }
   }, 200);
-  setTimeout(() => clearInterval(poll), 6000);
-}
-
-function waitForScore(userUci) {
-  const poll = setInterval(() => {
-    if (puzzleBestMove) { clearInterval(poll); recordScore(userUci); }
-  }, 200);
-  setTimeout(() => {
+  setTimeout(function() {
     clearInterval(poll);
     if (!puzzleBestMove) showFeedback('info', 'Engine timed out.');
   }, 6000);
 }
 
 function showOnBoardJudgment(userUci) {
-  const userTo = userUci.slice(2, 4);
   const correct = puzzleBestMove && userUci.slice(0,4) === puzzleBestMove.slice(0,4);
   clearArrow();
   if (correct) {
-    drawBadge(userTo, 'correct');
+    drawBadge(userUci.slice(2,4), 'correct');
   } else {
     if (puzzleBestMove) drawArrow(puzzleBestMove.slice(0,2), puzzleBestMove.slice(2,4));
-    drawBadge(userTo, 'wrong');
+    drawBadge(userUci.slice(2,4), 'wrong');
   }
-  startAnalysis(game.fen(), 'eval');
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  Puzzle Scoring & Feedback
+// ═══════════════════════════════════════════════════════════════
 function recordScore(userUci) {
-  const correct = puzzleBestMove && userUci.slice(0,4) === puzzleBestMove.slice(0,4);
+  const correct        = puzzleBestMove && userUci.slice(0,4) === puzzleBestMove.slice(0,4);
   const isMemorization = currentOpening?.type === 'memorization';
   if (correct) {
     score.correct++;
     score.streak++;
-    const san = uciToSan(userUci, puzzleFen);
+    const san = uciToSan(userUci, hist.puzzleFen());
     const msg = isMemorization
       ? `✓ <strong>${san}</strong> is the continuation of the line.`
       : `✓ Correct! Engine's top choice is <strong>${san}</strong>.`;
     showFeedback('correct', msg);
   } else {
     score.streak = 0;
-    const bestSan = puzzleBestMove ? uciToSan(puzzleBestMove, puzzleFen) : '?';
+    const bestSan = puzzleBestMove ? uciToSan(puzzleBestMove, hist.puzzleFen()) : '?';
     const msg = isMemorization
       ? `✗ The line continues <strong>${bestSan}</strong>.`
       : `✗ Best move was <strong>${bestSan}</strong>.`;
@@ -630,16 +599,14 @@ function recordScore(userUci) {
 }
 
 function revealBestMove() {
-  if (isTerminalPosition(navIndex)) return;
-  const atPuzzle = (navIndex === puzzleIdx);
+  if (isTerminalPosition(hist.fen())) return;
 
-  if (atPuzzle && !puzzleScored) {
-    // Pre-attempt reveal — count as wrong first
+  if (hist.atPuzzle() && !puzzleScored) {
     if (!puzzleBestMove) { showFeedback('info', 'Engine is still thinking…'); return; }
     puzzleScored = true;
     score.total++;
     score.streak = 0;
-    const bestSan = uciToSan(puzzleBestMove, puzzleFen);
+    const bestSan        = uciToSan(puzzleBestMove, hist.puzzleFen());
     const isMemorization = currentOpening?.type === 'memorization';
     const msg = isMemorization
       ? `✗ The line continues <strong>${bestSan}</strong>.`
@@ -648,33 +615,29 @@ function revealBestMove() {
     updateScoreDisplay();
   }
 
-  // Draw best move for the current board position, not the puzzle position
-  dynamicBestMove = true;
-  const currentFen = fenAt(navIndex);
-  const arrowMove = positionBestMove[currentFen] || bestMove;
-  if (arrowMove) drawArrow(arrowMove.slice(0,2), arrowMove.slice(2,4));
+  showBestMoveActive = true;
+  const cached = cacheGet(hist.fen());
+  if (cached && cached.bestMove) drawArrow(cached.bestMove.slice(0,2), cached.bestMove.slice(2,4));
+}
+
+function showFeedback(type, html) { $('#feedback').attr('class', 'feedback ' + type).html(html); }
+function hideFeedback()           { $('#feedback').attr('class', 'feedback'); }
+
+function updateScoreDisplay() {
+  $('#scoreDisplay').text(score.correct + ' / ' + score.total);
+  $('#streakDisplay').text(score.streak > 1 ? '🔥 ' + score.streak + ' in a row' : '');
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Helpers
+//  Arrow & Badge
 // ═══════════════════════════════════════════════════════════════
-function uciToSan(uci, fen) {
-  try {
-    const tmp  = new Chess(fen);
-    const from = uci.slice(0, 2);
-    const to   = uci.slice(2, 4);
-    const promo = uci.length > 4 ? uci[4] : undefined;
-    const mv = tmp.move({ from, to, promotion: promo || 'q' });
-    return mv ? mv.san : uci;
-  } catch (_) { return uci; }
-}
-
 let boardFlipped = false;
+let board        = null;
 
 function sqCenter(sq) {
-  const files  = 'abcdefgh';
-  const canvas = document.getElementById('arrowCanvas');
-  const sqSize = canvas.width / 8;
+  const files   = 'abcdefgh';
+  const canvas  = document.getElementById('arrowCanvas');
+  const sqSize  = canvas.width / 8;
   const fileIdx = files.indexOf(sq[0]);
   const rankIdx = parseInt(sq[1]) - 1;
   const x = boardFlipped ? (7 - fileIdx + 0.5) * sqSize : (fileIdx + 0.5) * sqSize;
@@ -683,110 +646,64 @@ function sqCenter(sq) {
 }
 
 function drawBadge(sq, type) {
-  const canvas = document.getElementById('arrowCanvas');
-  const ctx    = canvas.getContext('2d');
-  const sqSize = canvas.width / 8;
-  const center = sqCenter(sq);
+  const canvas   = document.getElementById('arrowCanvas');
+  const ctx      = canvas.getContext('2d');
+  const sqSize   = canvas.width / 8;
+  const center   = sqCenter(sq);
   const fontSize = sqSize * 0.38;
-  const x = center.x + sqSize * 0.22;
-  const y = center.y - sqSize * 0.22;
-
   ctx.font         = `bold ${Math.round(fontSize)}px Arial`;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = type === 'correct' ? '#3ddc64' : '#ff4444';
-  ctx.fillText(type === 'correct' ? '✓' : '✗', x, y);
+  ctx.fillText(type === 'correct' ? '✓' : '✗', center.x + sqSize * 0.22, center.y - sqSize * 0.22);
 }
 
 function sizeArrowCanvas() {
   const boardEl = document.getElementById('board');
   const canvas  = document.getElementById('arrowCanvas');
-  const w = boardEl.offsetWidth;
-  const h = boardEl.offsetHeight;
-  canvas.width  = w;
-  canvas.height = h;
+  canvas.width  = boardEl.offsetWidth;
+  canvas.height = boardEl.offsetHeight;
 }
 
 function clearArrow() {
   sizeArrowCanvas();
   const canvas = document.getElementById('arrowCanvas');
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function drawArrow(fromSq, toSq, color = 'rgba(100, 220, 90, 0.90)') {
-  const canvas = document.getElementById('arrowCanvas');
+  const canvas  = document.getElementById('arrowCanvas');
   sizeArrowCanvas();
-  const ctx  = canvas.getContext('2d');
+  const ctx     = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const sqSize = canvas.width / 8;
-  const from   = sqCenter(fromSq);
-  const to     = sqCenter(toSq);
-  const angle  = Math.atan2(to.y - from.y, to.x - from.x);
-
+  const sqSize  = canvas.width / 8;
+  const from    = sqCenter(fromSq);
+  const to      = sqCenter(toSq);
+  const angle   = Math.atan2(to.y - from.y, to.x - from.x);
   const lineW   = sqSize * 0.18;
   const headW   = sqSize * 0.46;
   const headLen = headW * (Math.sqrt(3) / 2);
-
-  // Tail starts 32% of a square away from source center (clears the piece)
-  const tailX = from.x + Math.cos(angle) * sqSize * 0.32;
-  const tailY = from.y + Math.sin(angle) * sqSize * 0.32;
-
-  // Arrowhead tip lands at destination center
-  const tipX = to.x;
-  const tipY = to.y;
-
-  // Body ends where arrowhead base begins
-  const bodyEndX = tipX - Math.cos(angle) * headLen;
-  const bodyEndY = tipY - Math.sin(angle) * headLen;
-
+  const tailX   = from.x + Math.cos(angle) * sqSize * 0.32;
+  const tailY   = from.y + Math.sin(angle) * sqSize * 0.32;
+  const bodyEndX = to.x - Math.cos(angle) * headLen;
+  const bodyEndY = to.y - Math.sin(angle) * headLen;
   ctx.save();
-  ctx.fillStyle   = color;
-  ctx.strokeStyle = color;
-
-  // Shaft
+  ctx.fillStyle = ctx.strokeStyle = color;
   ctx.lineWidth = lineW;
   ctx.lineCap   = 'round';
-  ctx.beginPath();
-  ctx.moveTo(tailX, tailY);
-  ctx.lineTo(bodyEndX, bodyEndY);
-  ctx.stroke();
-
-  // Equilateral arrowhead
+  ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(bodyEndX, bodyEndY); ctx.stroke();
   ctx.save();
-  ctx.translate(tipX, tipY);
-  ctx.rotate(angle);
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(-headLen,  headW / 2);
-  ctx.lineTo(-headLen, -headW / 2);
-  ctx.closePath();
-  ctx.fill();
+  ctx.translate(to.x, to.y); ctx.rotate(angle);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-headLen, headW / 2); ctx.lineTo(-headLen, -headW / 2);
+  ctx.closePath(); ctx.fill();
   ctx.restore();
-
   ctx.restore();
-}
-
-function showFeedback(type, html) {
-  $('#feedback').attr('class', 'feedback ' + type).html(html);
-}
-
-function hideFeedback() {
-  $('#feedback').attr('class', 'feedback');
-}
-
-function updateScoreDisplay() {
-  $('#scoreDisplay').text(score.correct + ' / ' + score.total);
-  $('#streakDisplay').text(score.streak > 1 ? '🔥 ' + score.streak + ' in a row' : '');
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════════════
-$(document).ready(function () {
-  game = new Chess();
-
+$(document).ready(function() {
   board = Chessboard('board', {
     draggable: false,
     position: 'start',
@@ -794,7 +711,6 @@ $(document).ready(function () {
     moveSpeed: 180,
   });
 
-  // Mousedown: start tracking for our own drag. No visual changes except square highlight.
   $('#board').on('mousedown', '.square-55d63', function(e) {
     if (e.which !== 1) return;
     mouseIsDown = true;
@@ -808,11 +724,9 @@ $(document).ready(function () {
     $(`[data-square="${square}"]`).addClass('sq-selected');
   });
 
-  // Click: handles both first click (select) and second click (move destination)
   $('#board').on('click', '.square-55d63', function() {
     const square = $(this).attr('data-square');
-    if (navIndex < puzzleIdx) return;
-
+    if (hist.cursor < hist.puzzleAt) return;
     if (selectedSquare === null) {
       if (!validPieceAt(square)) return;
       selectedSquare = square;
@@ -824,7 +738,7 @@ $(document).ready(function () {
       selectedSquare = null;
       $('.sq-selected').removeClass('sq-selected');
       if (performMove(from, square)) {
-        board.position(fenAt(navIndex), false);
+        board.position(hist.fen(), false);
       } else if (validPieceAt(square)) {
         selectedSquare = square;
         $(`[data-square="${square}"]`).addClass('sq-selected');
@@ -840,15 +754,14 @@ $(document).ready(function () {
   });
 
   $('#openingCard').on('click', function() {
-    if (navIndex === puzzleIdx && fullLine.length === puzzleIdx) return;
-    fullLine = [...origOpening];
-    navIndex = puzzleIdx;
-    board.position(puzzleFen, false);
+    if (hist.atPuzzle()) return;
+    hist.resetToOpening();
+    board.position(hist.fen(), false);
     clearArrow();
-    setLastMoveHighlight(origOpening);
+    setLastMoveHighlight(currentOpening.moves);
     updateNavButtons();
     updatePuzzlePositionState();
-    startAnalysis(puzzleFen, 'eval');
+    analyzePosition(hist.fen());
   });
 
   initEngine();

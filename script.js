@@ -1,30 +1,105 @@
 // ═══════════════════════════════════════════════════════════════
-//  Debug Logging
+//  Lichess Log
 // ═══════════════════════════════════════════════════════════════
-const logLines = [];
+const lichessLogLines = [];
 
-function dbg(msg) {
-  const ts = new Date().toISOString().slice(11, 23);
-  const line = '[' + ts + '] ' + msg;
-  logLines.push(line);
-  const el = document.getElementById('debugLog');
+function appendLog(text) {
+  lichessLogLines.push(text);
+  const el = document.getElementById('lichessLog');
   if (el) {
-    el.textContent += line + '\n';
+    el.textContent += text + '\n';
     el.scrollTop = el.scrollHeight;
   }
 }
 
 function copyLog() {
-  navigator.clipboard.writeText(logLines.join('\n'))
+  navigator.clipboard.writeText(lichessLogLines.join('\n'))
     .then(() => alert('Log copied to clipboard!'))
     .catch(() => alert('Copy failed — select the log text manually.'));
 }
 
 function toggleLog() {
-  const log = document.getElementById('debugLog');
+  const log = document.getElementById('lichessLog');
   const btn = event.target;
   if (log.style.display === 'none') { log.style.display = ''; btn.textContent = 'Hide'; }
   else { log.style.display = 'none'; btn.textContent = 'Show'; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Ask Lichess
+// ═══════════════════════════════════════════════════════════════
+function askLichess() {
+  const fen = fenAt(navIndex);
+  fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=3')
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      appendLog('════════════════════════════════');
+      appendLog('FEN: ' + fen);
+      appendLog('Top moves  (depth ' + (data.depth || '?') + ')');
+      (data.pvs || []).slice(0, 3).forEach(function(pv, i) {
+        const uci = pv.moves.split(' ')[0];
+        const san = uciToSan(uci, fen);
+        let ev;
+        if (pv.mate != null) {
+          ev = (pv.mate > 0 ? 'M' : '-M') + Math.abs(pv.mate);
+        } else {
+          const cp = pv.cp != null ? pv.cp : 0;
+          ev = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2);
+        }
+        appendLog('  ' + (i + 1) + '. ' + san.padEnd(6) + ev.padStart(6));
+      });
+    })
+    .catch(function(err) { appendLog('error: ' + err.message); });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Lichess Eval (background — runs alongside Stockfish)
+// ═══════════════════════════════════════════════════════════════
+function fetchLichessEval(fen, mode) {
+  fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=1')
+    .then(function(r) {
+      if (!r.ok) throw new Error('not found');
+      return r.json();
+    })
+    .then(function(data) {
+      // Discard if position has changed since this fetch was started
+      if (fen !== analysisFen) return;
+      if (!data.pvs || data.pvs.length === 0) throw new Error('no pvs');
+
+      const pv  = data.pvs[0];
+      const uci = pv.moves.split(' ')[0];
+
+      appendLog('received  best: ' + uciToSan(uci, fen) + ' [' + uci + ']');
+
+      // Fix eval bar to Lichess value
+      let rawCp;
+      if (pv.mate != null) {
+        rawCp = pv.mate > 0 ? 30000 : -30000;
+      } else {
+        rawCp = pv.cp != null ? pv.cp : 0;
+      }
+      const whiteCp = new Chess(fen).turn() === 'b' ? -rawCp : rawCp;
+      updateEvalBar(whiteCp, pv.mate != null ? pv.mate : null);
+      $('#depthBadge').text('depth ' + (data.depth || '?'));
+
+      // Fix best move to Lichess value and stop Stockfish
+      if (mode === 'puzzle') puzzleBestMove = uci;
+      bestMove = uci;
+      lichessConfirmedFens.add(fen);
+      positionBestMove[fen] = uci;
+      sf.postMessage('stop');
+      analyzing = false;
+      $('#thinkDots').hide();
+
+      // If arrow is live, redraw with Lichess best move
+      if (dynamicBestMove) drawArrow(uci.slice(0, 2), uci.slice(2, 4));
+    })
+    .catch(function() {
+      if (fen === analysisFen) appendLog('error');
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -57,7 +132,14 @@ let analysisMode = 'puzzle';
 let analyzing = false;
 let engineReady = false;
 let analysisFen = ''; // FEN that was sent to the engine — used to correctly flip cp sign
-let dynamicBestMove = false; // true while "Show Best Move" infinite search is running
+let dynamicBestMove = false; // true while "Show Best Move" arrow is live
+
+// Maps fen -> best UCI move, updated by Stockfish and Lichess for every position visited.
+// Used by revealBestMove so the arrow always reflects the current board position.
+const positionBestMove = {};
+
+// FENs where Lichess has provided the definitive best move — Stockfish must not overwrite these.
+const lichessConfirmedFens = new Set();
 
 function initEngine() {
   sf = new Worker('stockfish.js');
@@ -101,6 +183,7 @@ function onEngineMessage(msg) {
     if (pvM) {
       if (!bestMove) $('#thinkDots').hide(); // first result — engine is no longer cold
       bestMove = pvM[1];
+      if (!lichessConfirmedFens.has(analysisFen)) positionBestMove[analysisFen] = pvM[1];
       if (analysisMode === 'puzzle') puzzleBestMove = pvM[1];
       if (dynamicBestMove) drawArrow(pvM[1].slice(0,2), pvM[1].slice(2,4));
     }
@@ -116,7 +199,7 @@ function onEngineMessage(msg) {
 
 function startAnalysis(fen, mode) {
   if (!sf || !engineReady) return;
-  dynamicBestMove = false; // cancel any active infinite search
+  dynamicBestMove = false;
   analysisFen = fen;
   analysisMode = mode || 'puzzle';
   analyzing = true;
@@ -126,6 +209,7 @@ function startAnalysis(fen, mode) {
   sf.postMessage('stop');
   sf.postMessage('position fen ' + fen);
   sf.postMessage('go infinite');
+  fetchLichessEval(fen, mode || 'puzzle');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -554,9 +638,11 @@ function revealBestMove() {
     updateScoreDisplay();
   }
 
-  // Engine is already running go infinite — just enable the arrow and draw current best
+  // Draw best move for the current board position, not the puzzle position
   dynamicBestMove = true;
-  if (bestMove) drawArrow(bestMove.slice(0,2), bestMove.slice(2,4));
+  const currentFen = fenAt(navIndex);
+  const arrowMove = positionBestMove[currentFen] || bestMove;
+  if (arrowMove) drawArrow(arrowMove.slice(0,2), arrowMove.slice(2,4));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -618,7 +704,7 @@ function clearArrow() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawArrow(fromSq, toSq) {
+function drawArrow(fromSq, toSq, color = 'rgba(100, 220, 90, 0.90)') {
   const canvas = document.getElementById('arrowCanvas');
   sizeArrowCanvas();
   const ctx  = canvas.getContext('2d');
@@ -632,7 +718,6 @@ function drawArrow(fromSq, toSq) {
   const lineW   = sqSize * 0.18;
   const headW   = sqSize * 0.46;
   const headLen = headW * (Math.sqrt(3) / 2);
-  const color   = 'rgba(100, 220, 90, 0.90)';
 
   // Tail starts 32% of a square away from source center (clears the piece)
   const tailX = from.x + Math.cos(angle) * sqSize * 0.32;

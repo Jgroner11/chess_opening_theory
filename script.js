@@ -14,6 +14,71 @@ async function loadOpeningSet() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Leitner Box Spaced Repetition
+//  Puzzles live in boxes 1 (new/missed) .. MAX_BOX (mastered); lower
+//  boxes are drawn far more often. A correct answer advances a
+//  puzzle's box, a miss resets it to 1. Memorization puzzles also
+//  get a weight boost until most of them are mastered, so the line
+//  gets learned before variations are drilled.
+// ═══════════════════════════════════════════════════════════════
+const MAX_BOX             = 5;
+const MASTERED_BOX         = 4;
+const BOX_WEIGHTS          = { 1: 10, 2: 5, 3: 3, 4: 2, 5: 1 };
+const MEMORIZATION_BOOST   = 4; // weight multiplier while no memorization puzzles are mastered yet
+
+function leitnerKey(opening)  { return opening.moves.join(','); }
+function leitnerStorageKey()  { return `leitner_${currentSet?.name || 'default'}`; }
+
+function loadLeitnerState() {
+  try { return JSON.parse(localStorage.getItem(leitnerStorageKey())) || {}; }
+  catch { return {}; }
+}
+
+function saveLeitnerState(state) {
+  localStorage.setItem(leitnerStorageKey(), JSON.stringify(state));
+}
+
+function getBox(state, opening) { return state[leitnerKey(opening)]?.box || 1; }
+
+function updateLeitnerBox(opening, correct) {
+  const state = loadLeitnerState();
+  const key   = leitnerKey(opening);
+  const box   = state[key]?.box || 1;
+  state[key]  = { box: correct ? Math.min(box + 1, MAX_BOX) : 1 };
+  saveLeitnerState(state);
+}
+
+// Weight boost for memorization puzzles: full strength until most of
+// them reach MASTERED_BOX, then tapers down to 1 (no boost).
+function memorizationMultiplier(state) {
+  const memPuzzles = OPENINGS.filter(o => o.type === 'memorization');
+  if (memPuzzles.length === 0) return 1;
+  const mastered    = memPuzzles.filter(o => getBox(state, o) >= MASTERED_BOX).length;
+  const masteryRatio = mastered / memPuzzles.length;
+  return 1 + (MEMORIZATION_BOOST - 1) * (1 - masteryRatio);
+}
+
+function pickNextPuzzle(exclude) {
+  const state   = loadLeitnerState();
+  const memMult = memorizationMultiplier(state);
+  const pool    = OPENINGS.length > 1 ? OPENINGS.filter(o => o !== exclude) : OPENINGS;
+
+  const weighted = pool.map(o => {
+    let weight = BOX_WEIGHTS[getBox(state, o)] || 1;
+    if (o.type === 'memorization') weight *= memMult;
+    return { opening: o, weight };
+  });
+
+  const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const w of weighted) {
+    roll -= w.weight;
+    if (roll <= 0) return w.opening;
+  }
+  return weighted[weighted.length - 1].opening;
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Move History
 //  Single source of truth for all position state.
 // ═══════════════════════════════════════════════════════════════
@@ -234,10 +299,7 @@ function loadPuzzle() {
     $('#openingDesc').text('Puzzles for this opening are being generated.');
     return;
   }
-  let next;
-  do { next = OPENINGS[Math.floor(Math.random() * OPENINGS.length)]; }
-  while (next === currentOpening && OPENINGS.length > 1);
-  currentOpening = next;
+  currentOpening = pickNextPuzzle(currentOpening);
 
   hist.load(currentOpening);
   puzzleBestMove     = currentOpening.bestMove;
@@ -499,6 +561,7 @@ function showOnBoardJudgment(userUci) {
 function recordScore(userUci) {
   const correct        = puzzleBestMove && userUci.slice(0,4) === puzzleBestMove.slice(0,4);
   const isMemorization = currentOpening?.type === 'memorization';
+  updateLeitnerBox(currentOpening, correct);
   if (correct) {
     score.correct++;
     score.streak++;
@@ -525,6 +588,7 @@ function revealBestMove() {
     puzzleScored = true;
     score.total++;
     score.streak = 0;
+    updateLeitnerBox(currentOpening, false);
     const bestSan        = uciToSan(puzzleBestMove, hist.puzzleFen());
     const isMemorization = currentOpening?.type === 'memorization';
     const msg = isMemorization

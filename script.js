@@ -1,51 +1,4 @@
 // ═══════════════════════════════════════════════════════════════
-//  Lichess Log
-// ═══════════════════════════════════════════════════════════════
-const lichessLogLines = [];
-
-function appendLog(text) {
-  lichessLogLines.push(text);
-  const el = document.getElementById('lichessLog');
-  if (el) { el.textContent += text + '\n'; el.scrollTop = el.scrollHeight; }
-}
-
-function copyLog() {
-  navigator.clipboard.writeText(lichessLogLines.join('\n'))
-    .then(() => alert('Log copied to clipboard!'))
-    .catch(() => alert('Copy failed — select the log text manually.'));
-}
-
-function toggleLog() {
-  const log = document.getElementById('lichessLog');
-  const btn = event.target;
-  if (log.style.display === 'none') { log.style.display = ''; btn.textContent = 'Hide'; }
-  else { log.style.display = 'none'; btn.textContent = 'Show'; }
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  Ask Lichess  (manual — logs top 3 moves)
-// ═══════════════════════════════════════════════════════════════
-function askLichess() {
-  const fen = hist.fen();
-  fetch('https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(fen) + '&multiPv=3')
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(data) {
-      appendLog('════════════════════════════════');
-      appendLog('FEN: ' + fen);
-      appendLog('Top moves  (depth ' + (data.depth || '?') + ')');
-      (data.pvs || []).slice(0, 3).forEach(function(pv, i) {
-        const uci = pv.moves.split(' ')[0];
-        const san = uciToSan(uci, fen);
-        let ev;
-        if (pv.mate != null) ev = (pv.mate > 0 ? 'M' : '-M') + Math.abs(pv.mate);
-        else { const cp = pv.cp != null ? pv.cp : 0; ev = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2); }
-        appendLog('  ' + (i + 1) + '. ' + san.padEnd(6) + ev.padStart(6));
-      });
-    })
-    .catch(function(err) { appendLog('error: ' + err.message); });
-}
-
-// ═══════════════════════════════════════════════════════════════
 //  Opening Sets
 //  Loaded from data/<set>.json — see loadOpeningSet().
 // ═══════════════════════════════════════════════════════════════
@@ -197,13 +150,11 @@ function analyzePosition(fen) {
       const pv  = data.pvs[0];
       const uci = pv.moves.split(' ')[0];
       cacheSet(fen, { bestMove: uci, cp: pv.cp ?? null, mate: pv.mate ?? null, depth: data.depth ?? null, source: 'lichess' });
-      appendLog('received  best: ' + uciToSan(uci, fen) + ' [' + uci + ']');
       applyResult(fen);
       $('#thinkDots').hide();
     })
     .catch(function() {
       if (hist.fen() !== fen) return;
-      appendLog('error: position not in Lichess cloud eval cache');
       if (engineReady) runEngine(fen);
     });
 }

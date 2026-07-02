@@ -224,12 +224,6 @@ header p {
 }
 .btn-slate:hover { background: #2e4a85; }
 
-.btn-blue {
-  background: #1a5fb4;
-  color: #ddeeff;
-}
-.btn-blue:hover { background: #2470cc; }
-
 /* score */
 .score-card { text-align: center; }
 

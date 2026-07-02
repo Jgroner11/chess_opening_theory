@@ -388,6 +388,7 @@ function processNavQueue() {
     const last = hist.moves[hist.cursor - 1];
     applyLastMove(last.slice(0,2), last.slice(2,4));
   }
+  showBestMoveActive = false;
   updateTurnIndicator(new Chess(fen).turn());
   updateNavButtons();
   updatePuzzlePositionState();
@@ -444,7 +445,7 @@ let $dragSrcImg = null;
 const DRAG_THRESHOLD = 8;
 
 function validPieceAt(square) {
-  if (hist.cursor < hist.puzzleAt) return false;
+  if (hist.cursor < hist.puzzleAt && !puzzleScored) return false;
   const g = new Chess(hist.fen());
   if (g.game_over()) return false;
   const p = g.get(square);
@@ -509,7 +510,7 @@ $(document).on('mouseup', function(e) {
 //  Move Execution
 // ═══════════════════════════════════════════════════════════════
 function performMove(source, target) {
-  if (hist.cursor < hist.puzzleAt) return false;
+  if (hist.cursor < hist.puzzleAt && !puzzleScored) return false;
   const g = new Chess(hist.fen());
   const move = g.move({ from: source, to: target, promotion: 'q' });
   if (!move) return false;

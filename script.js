@@ -584,8 +584,12 @@ function revealBestMove() {
   }
 
   showBestMoveActive = true;
-  const cached = cacheGet(hist.fen());
-  if (cached && cached.bestMove) drawArrow(cached.bestMove.slice(0,2), cached.bestMove.slice(2,4));
+  if (hist.atPuzzle()) {
+    if (puzzleBestMove) drawArrow(puzzleBestMove.slice(0,2), puzzleBestMove.slice(2,4));
+  } else {
+    const cached = cacheGet(hist.fen());
+    if (cached && cached.bestMove) drawArrow(cached.bestMove.slice(0,2), cached.bestMove.slice(2,4));
+  }
 }
 
 function showFeedback(type, html) { $('#feedback').attr('class', 'feedback ' + type).html(html); }

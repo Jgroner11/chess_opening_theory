@@ -1,6 +1,116 @@
 {
   "name": "Benoni Defense — Main Line",
   "player": "black",
-  "root": ["d2d4", "g8f6", "c2c4", "c7c5", "d4d5", "e7e6", "b1c3", "e6d5", "c4d5", "d7d6", "g1f3", "g7g6"],
-  "puzzles": []
+  "root": [
+    "d2d4",
+    "g8f6",
+    "c2c4",
+    "c7c5",
+    "d4d5",
+    "e7e6",
+    "b1c3",
+    "e6d5",
+    "c4d5",
+    "d7d6",
+    "g1f3",
+    "g7g6"
+  ],
+  "puzzles": [
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4"
+      ],
+      "bestMove": "g8f6",
+      "eval": {
+        "cp": 15,
+        "mate": null
+      }
+    },
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4"
+      ],
+      "bestMove": "c7c5",
+      "eval": {
+        "cp": 56,
+        "mate": null
+      }
+    },
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5"
+      ],
+      "bestMove": "e7e6",
+      "eval": {
+        "cp": 82,
+        "mate": null
+      }
+    },
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3"
+      ],
+      "bestMove": "e6d5",
+      "eval": {
+        "cp": 70,
+        "mate": null
+      }
+    },
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c4d5"
+      ],
+      "bestMove": "d7d6",
+      "eval": {
+        "cp": 61,
+        "mate": null
+      }
+    },
+    {
+      "type": "memorization",
+      "moves": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "d4d5",
+        "e7e6",
+        "b1c3",
+        "e6d5",
+        "c4d5",
+        "d7d6",
+        "g1f3"
+      ],
+      "bestMove": "g7g6",
+      "eval": {
+        "cp": 66,
+        "mate": null
+      }
+    }
+  ]
 }

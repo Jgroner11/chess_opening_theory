@@ -5,39 +5,9 @@ View the site via VS Code Live Server (`index.html`).
 
 ---
 
-## Terminal Commands
+## Puzzle Data
 
-All scripts run with Node.js from the project directory. No npm installs required.
-
-### Generate memorization puzzles
-
-Generates one puzzle for each of the target player's moves in the opening's root line and adds them to `script.js`. Safe to run multiple times — duplicates are skipped.
-
-```
-node generate-memorization-puzzles.js <set-name>
-```
-
-**Example:**
-```
-node generate-memorization-puzzles.js benoni
-```
-
-This adds puzzles like "Benoni Defense — Main Line — 1...Nf6", "...2...c5", etc.
-
----
-
-### Clear all puzzles from a set
-
-Removes every puzzle from the named set in `script.js`, leaving the set structure intact.
-
-```
-node generate-memorization-puzzles.js <set-name> --clear
-```
-
-**Example:**
-```
-node generate-memorization-puzzles.js benoni --clear
-```
+Opening sets live in `data/<set-name>.json` as `{ name, player, root, puzzles }`. Puzzles are generated algorithmically by a Python script (TBD) and written into these JSON files — `script.js` loads them at runtime via `?set=<set-name>`.
 
 ---
 

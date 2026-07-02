@@ -47,23 +47,18 @@ function askLichess() {
 
 // ═══════════════════════════════════════════════════════════════
 //  Opening Sets
+//  Loaded from data/<set>.json — see loadOpeningSet().
 // ═══════════════════════════════════════════════════════════════
-const OPENING_SETS = {};
+let currentSet = null;
+let OPENINGS   = [];
 
-OPENING_SETS['benoni'] = {
-  name:   'Benoni Defense — Main Line',
-  player: 'black',
-  root:   ['d2d4','g8f6','c2c4','c7c5','d4d5','e7e6','b1c3','e6d5','c4d5','d7d6','g1f3','g7g6'],
-  puzzles: [
-    { name: 'Benoni — after 6...g6',
-      moves: ['d2d4','g8f6','c2c4','c7c5','d4d5','e7e6','b1c3','e6d5','c4d5','d7d6','g1f3','g7g6'],
-      desc: 'After 1.d4 Nf6 2.c4 c5 3.d5 e6 4.Nc3 exd5 5.cxd5 d6 6.Nf3 g6. What is Black\'s best continuation?' },
-  ],
-};
-
-const set = new URLSearchParams(window.location.search).get('set') || 'benoni';
-const currentSet = OPENING_SETS[set] || OPENING_SETS['benoni'];
-const OPENINGS = currentSet.puzzles;
+async function loadOpeningSet() {
+  const set = new URLSearchParams(window.location.search).get('set') || 'benoni';
+  const resp = await fetch(`data/${set}.json`);
+  if (!resp.ok) throw new Error(`Could not load data/${set}.json (HTTP ${resp.status})`);
+  currentSet = await resp.json();
+  OPENINGS   = currentSet.puzzles;
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  Move History
@@ -157,10 +152,6 @@ function onEngineMessage(msg) {
     const uci = pvM[1];
     cacheSet(sfFen, { bestMove: uci, cp, mate, depth: depthM ? parseInt(depthM[1]) : null, source: 'stockfish' });
 
-    if (sfFen === hist.puzzleFen() && currentOpening?.type !== 'memorization') {
-      puzzleBestMove = uci;
-    }
-
     if (showBestMoveActive && sfFen === hist.fen()) {
       drawArrow(uci.slice(0, 2), uci.slice(2, 4));
     }
@@ -226,11 +217,6 @@ function applyResult(fen) {
   const whiteCp = new Chess(fen).turn() === 'b' ? -rawCp : rawCp;
   updateEvalBar(whiteCp, c.mate ?? null);
   if (c.depth) $('#depthBadge').text('depth ' + c.depth);
-
-  // Update puzzle best move if this is the puzzle position
-  if (fen === hist.puzzleFen() && currentOpening?.type !== 'memorization') {
-    puzzleBestMove = c.bestMove;
-  }
 
   // Draw live arrow if show best move is active and we're still on this position
   if (showBestMoveActive && hist.fen() === fen) {
@@ -303,7 +289,7 @@ function loadPuzzle() {
   currentOpening = next;
 
   hist.load(currentOpening);
-  puzzleBestMove     = currentOpening.type === 'memorization' ? currentOpening.answer : null;
+  puzzleBestMove     = currentOpening.bestMove;
   puzzleScored       = false;
   showBestMoveActive = false;
 
@@ -315,8 +301,8 @@ function loadPuzzle() {
 
   clearArrow();
   setLastMoveHighlight(currentOpening.moves);
-  $('#openingName').text(currentOpening.name);
-  $('#openingDesc').text(currentOpening.desc);
+  $('#openingName').text(currentSet.name);
+  $('#openingDesc').text(currentOpening.type === 'memorization' ? 'What is the next move in the line?' : 'What is the best move here?');
   updateTurnIndicator(new Chess(fen).turn());
   updateNavButtons();
   updatePuzzlePositionState();
@@ -532,12 +518,8 @@ function performMove(source, target) {
     if (!puzzleScored) {
       puzzleScored = true;
       score.total++;
-      if (!puzzleBestMove) {
-        waitForPuzzleAnswer(userUci);
-      } else {
-        recordScore(userUci);
-        showOnBoardJudgment(userUci);
-      }
+      recordScore(userUci);
+      showOnBoardJudgment(userUci);
     } else {
       showOnBoardJudgment(userUci);
     }
@@ -547,20 +529,6 @@ function performMove(source, target) {
 
   analyzePosition(hist.fen());
   return true;
-}
-
-function waitForPuzzleAnswer(userUci) {
-  const poll = setInterval(function() {
-    if (puzzleBestMove) {
-      clearInterval(poll);
-      recordScore(userUci);
-      showOnBoardJudgment(userUci);
-    }
-  }, 200);
-  setTimeout(function() {
-    clearInterval(poll);
-    if (!puzzleBestMove) showFeedback('info', 'Engine timed out.');
-  }, 6000);
 }
 
 function showOnBoardJudgment(userUci) {
@@ -603,7 +571,6 @@ function revealBestMove() {
   if (isTerminalPosition(hist.fen())) return;
 
   if (hist.atPuzzle() && !puzzleScored) {
-    if (!puzzleBestMove) { showFeedback('info', 'Engine is still thinking…'); return; }
     puzzleScored = true;
     score.total++;
     score.streak = 0;
@@ -704,7 +671,7 @@ function drawArrow(fromSq, toSq, color = 'rgba(100, 220, 90, 0.90)') {
 // ═══════════════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════════════
-$(document).ready(function() {
+$(document).ready(async function() {
   board = Chessboard('board', {
     draggable: false,
     position: 'start',
@@ -766,5 +733,12 @@ $(document).ready(function() {
   });
 
   initEngine();
-  loadPuzzle();
+
+  try {
+    await loadOpeningSet();
+    loadPuzzle();
+  } catch (err) {
+    $('#openingName').text('Failed to load opening set');
+    $('#openingDesc').text(err.message);
+  }
 });
